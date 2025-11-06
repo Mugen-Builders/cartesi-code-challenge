@@ -1,0 +1,115 @@
+from os import environ
+import logging
+import requests
+import marshal
+import types
+import traceback
+import json
+
+logging.basicConfig(level="INFO")
+logger = logging.getLogger(__name__)
+
+rollup_server = environ.get(
+    "ROLLUP_HTTP_SERVER_URL", "http://localhost:8080/rollup")
+logger.info(f"HTTP rollup server URL is {rollup_server}")
+
+code = (
+    b'\xe3\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x06\x00\x00\x00\x03\x00\x00\x00\xf3\xc0\x00\x00\x00\x95\x00\x55\x00\x6e\x02\x53\x01\x6e\x03\x55\x02\x53\x02'
+    b'\x3a\x77\x00\x00\x61\x30\x00\x00\x55\x03\x53\x03\x3a\x12\x00\x00\x61\x2a\x00\x00\x55\x02\x53\x04\x2d\x06\x00\x00\x53\x01\x3a\x58\x00\x00\x61\x06\x00\x00\x55\x02'
+    b'\x53\x04\x2d\x02\x00\x00\x6e\x02\x4f\x08\x53\x05\x55\x02\x2d\x05\x00\x00\x53\x02\x2d\x00\x00\x00\x6e\x02\x55\x03\x53\x02\x2d\x0d\x00\x00\x6e\x03\x55\x02\x53\x02'
+    b'\x3a\x77\x00\x00\x61\x08\x00\x00\x55\x03\x53\x03\x3a\x12\x00\x00\x61\x02\x00\x00\x4d\x2a\x00\x00\x55\x02\x53\x02\x3a\x58\x00\x00\x61\x0d\x00\x00\x55\x03\x53\x06'
+    b'\x3a\x58\x00\x00\x61\x07\x00\x00\x55\x01\x53\x07\x3a\x58\x00\x00\x61\x01\x00\x00\x67\x08\x5b\x01\x00\x00\x00\x00\x00\x00\x00\x00\x53\x09\x55\x03\x0e\x00\x53\x0a'
+    b'\x55\x01\x0e\x00\x33\x04\x35\x01\x00\x00\x00\x00\x00\x00\x20\x00\x67\x0b\x29\x0c\x4e\xe9\x00\x00\x00\x00\xe9\x01\x00\x00\x00\xe9\xc8\x00\x00\x00\xe9\x02\x00\x00'
+    b'\x00\xe9\x03\x00\x00\x00\xe9\x6f\x00\x00\x00\xe9\x3c\x06\x00\x00\x54\xfa\x0f\x4a\x6f\x75\x72\x6e\x65\x79\x20\x73\x74\x65\x70\x73\x3a\x20\xfa\x08\x2c\x20\x79\x65'
+    b'\x61\x72\x3a\x20\x46\x29\x01\xda\x05\x70\x72\x69\x6e\x74\x29\x04\xda\x05\x67\x75\x65\x73\x73\xda\x0a\x62\x69\x72\x74\x68\x5f\x79\x65\x61\x72\xda\x01\x6e\xda\x05'
+    b'\x73\x74\x65\x70\x73\x73\x04\x00\x00\x00\x20\x20\x20\x20\xda\x5f\x2f\x55\x73\x65\x72\x73\x2f\x68\x65\x6e\x72\x69\x71\x75\x65\x6d\x61\x72\x6c\x6f\x6e\x2f\x50\x72'
+    b'\x6f\x6a\x65\x63\x74\x73\x2f\x63\x61\x72\x74\x65\x73\x69\x2f\x63\x61\x72\x74\x65\x73\x69\x2d\x63\x6f\x64\x65\x2d\x63\x68\x61\x6c\x6c\x65\x6e\x67\x65\x2f\x63\x68'
+    b'\x61\x6c\x6c\x65\x6e\x67\x65\x2f\x63\x72\x65\x61\x74\x65\x5f\x6e\x65\x77\x5f\x63\x68\x61\x6c\x6c\x65\x6e\x67\x65\x2e\x70\x79\xda\x05\x63\x6c\x61\x69\x6d\x72\x11'
+    b'\x00\x00\x00\x07\x00\x00\x00\x73\x83\x00\x00\x00\x80\x00\xd8\x08\x0d\x80\x41\xd8\x0c\x0d\x80\x45\xd8\x0a\x0b\x88\x71\x8b\x26\x90\x55\x98\x53\x93\x5b\xd8\x0b\x0c'
+    b'\x88\x71\x89\x35\x90\x41\x8b\x3a\xd8\x10\x11\x90\x51\x91\x06\x89\x41\xe0\x10\x11\x90\x41\x91\x05\x98\x01\x91\x09\x88\x41\xd8\x08\x0d\x90\x11\x89\x0a\x88\x05\xf0'
+    b'\x0b\x00\x0b\x0c\x88\x71\x8b\x26\x90\x55\x98\x53\x95\x5b\xf0\x0c\x00\x08\x09\x88\x41\x83\x76\x90\x25\x98\x33\x93\x2c\xa0\x3a\xb0\x14\xd3\x23\x35\xd8\x0f\x13\xdc'
+    b'\x04\x09\x88\x4f\x98\x45\x98\x37\xa0\x28\xa8\x3a\xa8\x2c\xd0\x0a\x37\xd4\x04\x38\xd8\x0b\x10\xf3\x00\x00\x00\x00'
+)
+
+
+cc = marshal.loads(code)
+
+# Hint 0: Never give up.
+# Hint 1: What is the birth year of the person who created the Cartesian coordinate system?
+# Hint 2: When the dreamer doubted all, yet affirmed existence through thought alone, the year marked a turning point in philosophy's dance with mathematics.
+# Hint 3: Seek the smallest power where trinity embraces primality, and watch as chaos yields to unity through precisely one hundred eleven transformations.
+# Hint 4: When mirrors show the same from every angle, and digits refuse to differ, the path becomes clear for those who count the journey, not the destination.
+guess_and_birth_year = types.FunctionType(cc, globals(), "claim")
+
+
+def hex_to_string(hex_value):
+    """
+    Decodes a hex string into a regular string.
+    """
+    return bytes.fromhex(hex_value[2:]).decode("utf-8")
+
+
+def string_to_hex(string_value):
+    """
+    Encodes a string as a hex string.
+    """
+    return "0x" + string_value.encode("utf-8").hex()
+
+
+def send_notice(notice: str) -> None:
+    send_post("notice", notice)
+
+
+def send_report(report: str) -> None:
+    send_post("report", report)
+
+
+def send_post(endpoint, json_data) -> None:
+    response = requests.post(rollup_server + f"/{endpoint}", json=json_data)
+    logger.info(
+        f"/{endpoint}: Received response status {response.status_code} body {response.content}")
+
+
+def handle_advance(data):
+    logger.info(
+        f"Receiving advance request with data {hex_to_string(data['payload'])} from {data['metadata']['msg_sender']}")
+    binary = hex_to_string(data['payload'])
+    json_data = json.loads(binary)
+    try:
+        if guess_and_birth_year(json_data["guess"], json_data["birth_year"]):
+            notice_payload = {"payload": string_to_hex(
+                f'Congratulations {data["metadata"]["msg_sender"]}! You have solved the challenge!')}
+            send_notice(notice_payload)
+            return "accept"
+        else:
+            raise ValueError("Wrong answer from " + data["metadata"]["msg_sender"])
+    except Exception as e:
+        msg = f"Error {e} processing data {data}"
+        logger.error(f"{msg}\n{traceback.format_exc()}")
+        send_report({"payload": string_to_hex(msg)})
+        return "reject"
+
+
+def handle_inspect(data):
+    logger.info(f"Received inspect request data {data}")
+    return "accept"
+
+
+handlers = {
+    "advance_state": handle_advance,
+    "inspect_state": handle_inspect,
+}
+
+finish = {"status": "accept"}
+
+while True:
+    logger.info("Sending finish")
+    response = requests.post(rollup_server + "/finish", json=finish)
+    logger.info(f"Received finish status {response.status_code}")
+    if response.status_code == 202:
+        logger.info("No pending rollup request, trying again")
+    else:
+        rollup_request = response.json()
+        data = rollup_request["data"]
+        handler = handlers[rollup_request["request_type"]]
+        finish["status"] = handler(rollup_request["data"])
