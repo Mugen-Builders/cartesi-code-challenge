@@ -29,7 +29,7 @@ Here's a video demonstrating the resolution of the code challenge presented by @
 
 ## Passo a Passo
 
-### 1. Configuração do Ambiente
+### 1. Configuração do Ambiente (Linux)
 
 #### Pré-requisitos
 
